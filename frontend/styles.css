@@ -267,21 +267,46 @@ header h1 {
 
 .download-status {
     margin-top: 30px;
+    margin-bottom: 30px;
     padding: 20px;
-    background: var(--card-bg);
+    background: linear-gradient(135deg, rgba(29, 185, 84, 0.1), rgba(30, 215, 96, 0.05));
     border-radius: 15px;
-    border: 1px solid var(--border-color);
+    border: 2px solid var(--primary-color);
+    box-shadow: 0 4px 20px rgba(29, 185, 84, 0.3);
+    position: sticky;
+    top: 20px;
+    z-index: 100;
 }
 
 .download-status h2 {
     margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--primary-color);
+}
+
+.queue-count {
+    font-size: 0.9rem;
+    font-weight: normal;
+    color: var(--text-secondary);
+}
+
+.status-content {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 }
 
 .status-item {
     padding: 15px;
-    margin-bottom: 10px;
     border-radius: 10px;
     border-left: 4px solid;
+    transition: all 0.3s ease;
+}
+
+.status-item:hover {
+    transform: translateX(2px);
 }
 
 .status-queued {
@@ -304,14 +329,95 @@ header h1 {
     border-color: var(--error-color);
 }
 
-.status-item h3 {
-    margin-bottom: 5px;
-    font-size: 1rem;
+.status-item-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
 }
 
-.status-item p {
+.status-art {
+    width: 50px;
+    height: 50px;
+    border-radius: 8px;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.status-item-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.status-item-info h3 {
+    margin: 0 0 4px 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.status-artist {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.status-badge {
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+}
+
+.status-badge-queued {
+    background: rgba(179, 179, 179, 0.2);
+    color: var(--text-secondary);
+}
+
+.status-badge-processing {
+    background: rgba(29, 185, 84, 0.2);
+    color: var(--primary-color);
+}
+
+.status-badge-completed {
+    background: rgba(29, 185, 84, 0.3);
+    color: var(--success-color);
+}
+
+.status-badge-error {
+    background: rgba(226, 33, 52, 0.2);
+    color: var(--error-color);
+}
+
+.status-message {
     color: var(--text-secondary);
     font-size: 0.9rem;
+    margin: 8px 0 0 0;
+}
+
+.progress-bar-container {
+    margin-top: 10px;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary-color), var(--primary-dark));
+    border-radius: 3px;
+    transition: width 0.3s ease;
+    box-shadow: 0 0 10px rgba(29, 185, 84, 0.5);
 }
 
 .hidden {

@@ -110,18 +110,19 @@ download_status: Dict[str, Dict] = {}
 def download_and_process(track_id: str, location: str = "local"):
     """Background task to download and process a track"""
     try:
-        download_status[track_id] = {"status": "processing", "message": "Fetching track info..."}
+        download_status[track_id] = {"status": "processing", "message": "Fetching track info...", "stage": "fetching", "progress": 10}
         
         # Get track details from Spotify
         track_info = spotify_service.get_track_details(track_id)
         if not track_info:
             download_status[track_id] = {
                 "status": "error",
-                "message": "Could not fetch track information"
+                "message": "Could not fetch track information",
+                "progress": 0
             }
             return
         
-        download_status[track_id] = {"status": "processing", "message": "Preparing download location..."}
+        download_status[track_id] = {"status": "processing", "message": "Preparing download location...", "stage": "preparing", "progress": 15}
         
         # Determine download path based on location preference
         if location == "navidrome":
@@ -139,7 +140,7 @@ def download_and_process(track_id: str, location: str = "local"):
             download_path = get_download_path(track_info, temp_dir, config.OUTPUT_FORMAT)
             print(f"Downloading track {track_id} for local browser download: {download_path}")
         
-        download_status[track_id] = {"status": "processing", "message": "Searching YouTube and downloading..."}
+        download_status[track_id] = {"status": "processing", "message": "Searching YouTube and downloading...", "stage": "downloading", "progress": 30}
         
         # Download - pass full track_info for better matching
         download_result = youtube_service.search_and_download(
@@ -152,11 +153,12 @@ def download_and_process(track_id: str, location: str = "local"):
         if not download_result.get('success'):
             download_status[track_id] = {
                 "status": "error",
-                "message": f"Download failed: {download_result.get('error', 'Unknown error')}"
+                "message": f"Download failed: {download_result.get('error', 'Unknown error')}",
+                "progress": 0
             }
             return
         
-        download_status[track_id] = {"status": "processing", "message": "Applying metadata..."}
+        download_status[track_id] = {"status": "processing", "message": "Applying metadata...", "stage": "tagging", "progress": 85}
         
         # Apply metadata to downloaded file
         metadata_service.apply_metadata(download_result['file_path'], track_info)
@@ -164,7 +166,7 @@ def download_and_process(track_id: str, location: str = "local"):
         # Handle completion based on location
         if location == "navidrome":
             # Copy to Navidrome music directory with proper structure (Artist/Album/)
-            download_status[track_id] = {"status": "processing", "message": "Copying to Navidrome library..."}
+            download_status[track_id] = {"status": "processing", "message": "Copying to Navidrome library...", "stage": "copying", "progress": 90}
             
             try:
                 # Get target path in Navidrome directory (Artist/Album/filename.mp3)
@@ -184,18 +186,23 @@ def download_and_process(track_id: str, location: str = "local"):
                     download_status[track_id] = {
                         "status": "completed",
                         "message": "Track successfully added to Navidrome library",
-                        "file_path": str(target_path)
+                        "file_path": str(target_path),
+                        "stage": "completed",
+                        "progress": 100
                     }
                 else:
                     download_status[track_id] = {
                         "status": "completed",
                         "message": f"Track added to library (scan may need manual trigger): {navidrome_result.get('error', '')}",
-                        "file_path": str(target_path)
+                        "file_path": str(target_path),
+                        "stage": "completed",
+                        "progress": 100
                     }
             except Exception as e:
                 download_status[track_id] = {
                     "status": "error",
-                    "message": f"Failed to copy to Navidrome: {str(e)}"
+                    "message": f"Failed to copy to Navidrome: {str(e)}",
+                    "progress": 0
                 }
         else:
             # For local downloads, provide download URL for browser to handle
@@ -208,13 +215,16 @@ def download_and_process(track_id: str, location: str = "local"):
                 "status": "completed",
                 "message": "Track ready for download",
                 "file_path": download_result['file_path'],
-                "download_url": download_url  # URL to trigger browser download
+                "download_url": download_url,  # URL to trigger browser download
+                "stage": "completed",
+                "progress": 100
             }
     
     except Exception as e:
         download_status[track_id] = {
             "status": "error",
-            "message": f"Error: {str(e)}"
+            "message": f"Error: {str(e)}",
+            "progress": 0
         }
 
 @app.get("/")
@@ -264,15 +274,17 @@ async def download_track(request: DownloadRequest, background_tasks: BackgroundT
         request.location = "local"  # Default to local
     
     # Initialize status
+    location_msg = "local downloads folder" if request.location == "local" else "Navidrome server"
     download_status[request.track_id] = {
         "status": "queued",
-        "message": "Download queued"
+        "message": f"Download queued for {location_msg}",
+        "progress": 0,
+        "stage": "queued"
     }
     
     # Add background task with location parameter
     background_tasks.add_task(download_and_process, request.track_id, request.location)
     
-    location_msg = "local downloads folder" if request.location == "local" else "Navidrome server"
     return {
         "status": "queued",
         "message": f"Download started to {location_msg}",

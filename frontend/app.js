@@ -134,10 +134,14 @@ async function downloadTrack(track) {
     const downloadLocation = document.getElementById('downloadLocation').value;
     
     // Mark as downloading
-    activeDownloads.set(trackId, { status: 'queued' });
+    activeDownloads.set(trackId, { status: 'queued', progress: 0, track: track });
     updateDownloadButton(trackId, true);
     
     try {
+        // Show download status section
+        showDownloadStatus();
+        addStatusItem(trackId, track, 'queued', 'Download queued...', 0);
+        
         // Start download
         const response = await fetch(`${API_BASE_URL}/api/download`, {
             method: 'POST',
@@ -154,10 +158,6 @@ async function downloadTrack(track) {
             const error = await response.json();
             throw new Error(error.detail || 'Download failed');
         }
-        
-        // Show download status section
-        showDownloadStatus();
-        addStatusItem(trackId, track, 'queued', 'Download queued...');
         
         // Poll for status updates
         pollDownloadStatus(trackId, track);
@@ -183,13 +183,18 @@ async function pollDownloadStatus(trackId, track) {
             }
             
             const status = await response.json();
+            // Store track info with status
+            status.track = track;
             activeDownloads.set(trackId, status);
-            updateStatusItem(trackId, status.status, status.message);
+            
+            // Get progress (default to 0 if not provided)
+            const progress = status.progress !== undefined ? status.progress : getProgressFromStatus(status.status, status.message);
+            updateStatusItem(trackId, status.status, status.message, progress);
             
             if (status.status === 'completed' || status.status === 'error') {
                 clearInterval(pollInterval);
                 updateDownloadButton(trackId, false);
-                activeDownloads.delete(trackId);
+                updateQueueCount();
                 
                 if (status.status === 'completed') {
                     // If it's a local download, trigger browser download
@@ -202,17 +207,23 @@ async function pollDownloadStatus(trackId, track) {
                         link.click();
                         document.body.removeChild(link);
                         
-                        updateStatusItem(trackId, 'completed', 'Download started - check your Downloads folder');
+                        updateStatusItem(trackId, 'completed', 'Download started - check your Downloads folder', 100);
                     } else {
                         // Navidrome download - just show as completed
                         updateTrackToDownloaded(trackId);
                     }
                     
-                    // Remove status after a delay
+                    // Keep completed items visible for a bit, then remove
                     setTimeout(() => {
                         removeStatusItem(trackId);
+                        activeDownloads.delete(trackId);
                     }, 5000);
+                } else {
+                    // Error - keep in queue but don't auto-remove
+                    activeDownloads.delete(trackId);
                 }
+            } else {
+                updateQueueCount();
             }
         } catch (err) {
             clearInterval(pollInterval);
@@ -223,26 +234,96 @@ async function pollDownloadStatus(trackId, track) {
     }, 2000); // Poll every 2 seconds
 }
 
-function addStatusItem(trackId, track, status, message) {
+function addStatusItem(trackId, track, status, message, progress = 0) {
+    // Remove existing item if present
+    const existing = document.getElementById(`status-${trackId}`);
+    if (existing) {
+        existing.remove();
+    }
+    
     const statusItem = document.createElement('div');
     statusItem.id = `status-${trackId}`;
     statusItem.className = `status-item status-${status}`;
+    
+    const progressBar = status === 'completed' || status === 'error' ? '' : `
+        <div class="progress-bar-container">
+            <div class="progress-bar" style="width: ${progress}%"></div>
+        </div>
+    `;
+    
+    const albumArt = track.album_art || 'https://via.placeholder.com/50?text=No+Image';
+    
     statusItem.innerHTML = `
-        <h3>${escapeHtml(track.name)} - ${escapeHtml(track.artist)}</h3>
-        <p>${escapeHtml(message)}</p>
+        <div class="status-item-header">
+            <img src="${albumArt}" alt="${track.album}" class="status-art" />
+            <div class="status-item-info">
+                <h3>${escapeHtml(track.name)}</h3>
+                <p class="status-artist">${escapeHtml(track.artist)}</p>
+            </div>
+            <div class="status-badge status-badge-${status}">${getStatusLabel(status)}</div>
+        </div>
+        <p class="status-message">${escapeHtml(message)}</p>
+        ${progressBar}
     `;
     statusContent.appendChild(statusItem);
 }
 
-function updateStatusItem(trackId, status, message) {
+function updateStatusItem(trackId, status, message, progress = 0) {
     const statusItem = document.getElementById(`status-${trackId}`);
     if (statusItem) {
         statusItem.className = `status-item status-${status}`;
-        const p = statusItem.querySelector('p');
-        if (p) {
-            p.textContent = message;
+        
+        // Update message
+        const messageP = statusItem.querySelector('.status-message');
+        if (messageP) {
+            messageP.textContent = message;
+        }
+        
+        // Update status badge
+        const badge = statusItem.querySelector('.status-badge');
+        if (badge) {
+            badge.className = `status-badge status-badge-${status}`;
+            badge.textContent = getStatusLabel(status);
+        }
+        
+        // Update progress bar
+        const progressBar = statusItem.querySelector('.progress-bar');
+        if (progressBar) {
+            progressBar.style.width = `${progress}%`;
+        } else if (status !== 'completed' && status !== 'error') {
+            // Add progress bar if it doesn't exist
+            const progressContainer = document.createElement('div');
+            progressContainer.className = 'progress-bar-container';
+            progressContainer.innerHTML = `<div class="progress-bar" style="width: ${progress}%"></div>`;
+            statusItem.appendChild(progressContainer);
         }
     }
+}
+
+function getStatusLabel(status) {
+    const labels = {
+        'queued': 'Queued',
+        'processing': 'Processing',
+        'completed': 'Completed',
+        'error': 'Error'
+    };
+    return labels[status] || status;
+}
+
+function getProgressFromStatus(status, message) {
+    if (status === 'completed') return 100;
+    if (status === 'error') return 0;
+    if (status === 'queued') return 0;
+    
+    // Estimate progress based on message
+    const lowerMessage = message.toLowerCase();
+    if (lowerMessage.includes('fetching') || lowerMessage.includes('fetch')) return 10;
+    if (lowerMessage.includes('preparing')) return 15;
+    if (lowerMessage.includes('searching') || lowerMessage.includes('downloading') || lowerMessage.includes('download')) return 50;
+    if (lowerMessage.includes('metadata') || lowerMessage.includes('applying') || lowerMessage.includes('tagging')) return 85;
+    if (lowerMessage.includes('copying') || lowerMessage.includes('navidrome')) return 90;
+    
+    return 30; // Default progress for processing
 }
 
 function removeStatusItem(trackId) {
@@ -318,9 +399,18 @@ function hideResults() {
 
 function showDownloadStatus() {
     downloadStatus.classList.remove('hidden');
+    updateQueueCount();
 }
 
 function hideDownloadStatus() {
     downloadStatus.classList.add('hidden');
+}
+
+function updateQueueCount() {
+    const queueCount = document.getElementById('queueCount');
+    if (queueCount) {
+        const activeCount = Array.from(activeDownloads.values()).filter(s => s.status !== 'completed' && s.status !== 'error').length;
+        queueCount.textContent = activeCount > 0 ? `(${activeCount} active)` : '';
+    }
 }
 
