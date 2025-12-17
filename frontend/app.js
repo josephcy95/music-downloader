@@ -127,11 +127,38 @@ function createTrackCard(track, isDownloaded = false) {
     `;
 }
 
-async function downloadTrack(track) {
+async function downloadTrack(track, selectedVideoId = null) {
     const trackId = track.id;
     
     // Get download location preference
     const downloadLocation = document.getElementById('downloadLocation').value;
+    
+    // If no video selected, first check if we need user confirmation
+    if (!selectedVideoId) {
+        try {
+            updateDownloadButton(trackId, true);
+            const candidatesResponse = await fetch(`${API_BASE_URL}/api/youtube/candidates/${trackId}`);
+            
+            if (candidatesResponse.ok) {
+                const data = await candidatesResponse.json();
+                
+                // If confidence is low, show candidate selection modal
+                if (data.needs_confirmation && data.candidates && data.candidates.length > 0) {
+                    updateDownloadButton(trackId, false);
+                    showCandidateModal(track, data.candidates, downloadLocation);
+                    return;
+                }
+                
+                // High confidence - use best match's video ID
+                if (data.candidates && data.candidates.length > 0) {
+                    selectedVideoId = data.candidates[0].video_id;
+                }
+            }
+        } catch (err) {
+            console.log('Candidate check failed, proceeding with search:', err);
+            // Continue without video_id - backend will search
+        }
+    }
     
     // Mark as downloading
     activeDownloads.set(trackId, { status: 'queued', progress: 0, track: track });
@@ -150,7 +177,8 @@ async function downloadTrack(track) {
             },
             body: JSON.stringify({ 
                 track_id: trackId,
-                location: downloadLocation  // 'local' or 'navidrome'
+                location: downloadLocation,
+                video_id: selectedVideoId  // Pass selected video ID if any
             }),
         });
         
@@ -168,6 +196,76 @@ async function downloadTrack(track) {
         showError(`Download failed: ${err.message}`);
     }
 }
+
+// Candidate selection modal
+let pendingTrack = null;
+let pendingLocation = null;
+
+function showCandidateModal(track, candidates, location) {
+    pendingTrack = track;
+    pendingLocation = location;
+    
+    const modal = document.getElementById('candidateModal');
+    const trackInfoDisplay = document.getElementById('trackInfoDisplay');
+    const candidatesList = document.getElementById('candidatesList');
+    
+    // Show track info
+    trackInfoDisplay.innerHTML = `
+        <div class="looking-for">
+            <strong>Looking for:</strong> ${escapeHtml(track.name)} by ${escapeHtml(track.artist)}
+        </div>
+    `;
+    
+    // Show candidates
+    candidatesList.innerHTML = candidates.map((candidate, index) => `
+        <div class="candidate-card" data-video-id="${candidate.video_id}">
+            <img src="${candidate.thumbnail || 'https://via.placeholder.com/120x68?text=No+Thumb'}" 
+                 alt="Thumbnail" class="candidate-thumb" />
+            <div class="candidate-info">
+                <div class="candidate-title">${escapeHtml(candidate.title)}</div>
+                <div class="candidate-channel">${escapeHtml(candidate.channel)}</div>
+                <div class="candidate-meta">
+                    <span class="candidate-duration">${formatDuration(candidate.duration * 1000)}</span>
+                    <span class="candidate-score ${getScoreClass(candidate.score)}">${Math.round(candidate.score * 100)}% match</span>
+                </div>
+            </div>
+            <button class="btn btn-download candidate-select" data-video-id="${candidate.video_id}">
+                Select
+            </button>
+        </div>
+    `).join('');
+    
+    // Add click handlers
+    candidatesList.querySelectorAll('.candidate-select').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const videoId = btn.dataset.videoId;
+            hideCandidateModal();
+            downloadTrack(pendingTrack, videoId);
+        });
+    });
+    
+    modal.classList.remove('hidden');
+}
+
+function hideCandidateModal() {
+    const modal = document.getElementById('candidateModal');
+    modal.classList.add('hidden');
+    pendingTrack = null;
+    pendingLocation = null;
+}
+
+function getScoreClass(score) {
+    if (score >= 0.8) return 'score-high';
+    if (score >= 0.5) return 'score-medium';
+    return 'score-low';
+}
+
+// Modal event listeners
+document.getElementById('modalClose')?.addEventListener('click', hideCandidateModal);
+document.getElementById('cancelSelection')?.addEventListener('click', hideCandidateModal);
+document.getElementById('candidateModal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'candidateModal') hideCandidateModal();
+});
 
 async function pollDownloadStatus(trackId, track) {
     const pollInterval = setInterval(async () => {

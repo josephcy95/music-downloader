@@ -50,6 +50,26 @@
         </div>
     </div>
 
+    <!-- Candidate Selection Modal -->
+    <div id="candidateModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>⚠️ Multiple Matches Found</h2>
+                <button class="modal-close" id="modalClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-description">
+                    We couldn't confidently match this song. Please select the correct version:
+                </p>
+                <div id="trackInfoDisplay" class="track-info-display"></div>
+                <div id="candidatesList" class="candidates-list"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="cancelSelection">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <script src="/app.js"></script>
 </body>
 </html>

@@ -1,19 +1,213 @@
 import yt_dlp
 import os
 import re
-from typing import Optional, Dict
+from difflib import SequenceMatcher
+from typing import Optional, Dict, List
 from pathlib import Path
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config
+
+# Confidence threshold - below this, show candidates to user
+CONFIDENCE_THRESHOLD = 0.65
 
 class YouTubeService:
     def __init__(self):
         self.output_format = config.OUTPUT_FORMAT
         self.audio_quality = config.AUDIO_QUALITY
     
-    def search_and_download(self, track_name: str, artist: str, output_path: str, track_info: Dict = None) -> Dict:
-        """Search YouTube for a track and download it"""
+    def calculate_similarity(self, str1: str, str2: str) -> float:
+        """Calculate similarity between two strings using SequenceMatcher (similar to Levenshtein)"""
+        str1 = str1.lower().strip()
+        str2 = str2.lower().strip()
+        return SequenceMatcher(None, str1, str2).ratio()
+    
+    def calculate_match_score(self, youtube_title: str, youtube_channel: str, 
+                               track_name: str, artist: str) -> float:
+        """Calculate overall match score between YouTube result and Spotify track"""
+        # Clean up strings
+        yt_title = youtube_title.lower()
+        yt_channel = youtube_channel.lower()
+        track = track_name.lower()
+        art = artist.lower()
+        
+        # Remove common suffixes from YouTube titles
+        for suffix in ['official audio', 'official video', 'official music video', 
+                       'lyrics', 'lyric video', 'audio', 'hd', '4k', 'official']:
+            yt_title = yt_title.replace(suffix, '').strip()
+        
+        # Calculate title similarity
+        title_sim = self.calculate_similarity(yt_title, track)
+        
+        # Also check if track name is contained in YouTube title
+        if track in yt_title:
+            title_sim = max(title_sim, 0.85)
+        
+        # Calculate artist similarity (check both title and channel)
+        artist_parts = [a.strip() for a in art.split(',')]
+        main_artist = artist_parts[0] if artist_parts else art
+        
+        artist_in_title = self.calculate_similarity(yt_title, f"{main_artist} {track}")
+        artist_in_channel = self.calculate_similarity(yt_channel, main_artist)
+        
+        # Bonus if artist name appears in title or channel
+        artist_bonus = 0
+        if main_artist in yt_title or main_artist in yt_channel:
+            artist_bonus = 0.15
+        
+        # Combined score: weight title match higher
+        score = (title_sim * 0.6) + (max(artist_in_title, artist_in_channel) * 0.3) + artist_bonus
+        
+        return min(score, 1.0)  # Cap at 1.0
+    
+    def search_candidates(self, track_name: str, artist: str, track_info: Dict = None, num_results: int = 5) -> Dict:
+        """Search YouTube and return top candidates with confidence scores"""
+        if track_info and track_info.get('album'):
+            query = f"{artist} {track_name} {track_info.get('album')} official"
+        else:
+            query = f"{artist} {track_name} official audio"
+        
+        ydl_opts = {
+            'quiet': True,
+            'no_warnings': True,
+            'extract_flat': True,  # Don't download, just get info
+            'default_search': f'ytsearch{num_results}',
+            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        }
+        
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                search_query = f"ytsearch{num_results}:{query}"
+                info = ydl.extract_info(search_query, download=False)
+                
+                candidates = []
+                if 'entries' in info and info['entries']:
+                    for entry in info['entries']:
+                        if not entry:
+                            continue
+                        
+                        title = entry.get('title', '')
+                        channel = entry.get('channel', entry.get('uploader', ''))
+                        video_id = entry.get('id', '')
+                        duration = entry.get('duration', 0)
+                        thumbnail = entry.get('thumbnail', '')
+                        
+                        # Calculate match score
+                        score = self.calculate_match_score(title, channel, track_name, artist)
+                        
+                        candidates.append({
+                            'video_id': video_id,
+                            'title': title,
+                            'channel': channel,
+                            'duration': duration,
+                            'thumbnail': thumbnail,
+                            'score': round(score, 3),
+                            'url': f"https://www.youtube.com/watch?v={video_id}"
+                        })
+                
+                # Sort by score descending
+                candidates.sort(key=lambda x: x['score'], reverse=True)
+                
+                # Determine if we need user confirmation
+                best_score = candidates[0]['score'] if candidates else 0
+                needs_confirmation = best_score < CONFIDENCE_THRESHOLD
+                
+                return {
+                    'success': True,
+                    'candidates': candidates[:3],  # Return top 3
+                    'best_score': best_score,
+                    'needs_confirmation': needs_confirmation,
+                    'threshold': CONFIDENCE_THRESHOLD
+                }
+                
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'candidates': [],
+                'needs_confirmation': False
+            }
+    
+    def download_by_video_id(self, video_id: str, output_path: str) -> Dict:
+        """Download a specific YouTube video by ID"""
+        output_path = os.path.abspath(output_path)
+        base_path = output_path.replace(f'.{self.output_format}', '')
+        
+        ydl_opts = {
+            'format': 'bestaudio[ext=m4a]/bestaudio/best[height<=720]/best',
+            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['android', 'web', 'ios'],
+                }
+            },
+            'retries': 10,
+            'fragment_retries': 10,
+            'file_access_retries': 3,
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': self.output_format,
+                'preferredquality': self.audio_quality,
+                'nopostoverwrites': False,
+            }],
+            'postprocessor_args': {
+                'ffmpeg': [
+                    '-af', 'aresample=44100',
+                    '-ac', '2',
+                ]
+            },
+            'outtmpl': base_path,
+            'fixup': 'never',
+            'quiet': False,
+            'no_warnings': False,
+            'noplaylist': True,
+        }
+        
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                url = f"https://www.youtube.com/watch?v={video_id}"
+                info = ydl.extract_info(url, download=True)
+                
+                # Find the downloaded file
+                expected_path = f"{base_path}.{self.output_format}"
+                if os.path.exists(expected_path):
+                    actual_path = expected_path
+                else:
+                    # Check other extensions
+                    actual_path = None
+                    for ext in ['m4a', 'webm', 'opus', self.output_format]:
+                        test_path = f"{base_path}.{ext}"
+                        if os.path.exists(test_path):
+                            actual_path = test_path
+                            break
+                    
+                    if not actual_path:
+                        raise FileNotFoundError(f"Downloaded file not found. Expected: {expected_path}")
+                
+                return {
+                    'success': True,
+                    'file_path': actual_path,
+                    'title': info.get('title', ''),
+                    'duration': info.get('duration', 0),
+                    'url': info.get('webpage_url', '')
+                }
+                
+        except Exception as e:
+            error_msg = str(e)
+            if '403' in error_msg or 'Forbidden' in error_msg:
+                error_msg = "YouTube blocked the request (HTTP 403). Try again in a few minutes."
+            return {
+                'success': False,
+                'error': error_msg
+            }
+    
+    def search_and_download(self, track_name: str, artist: str, output_path: str, track_info: Dict = None, video_id: str = None) -> Dict:
+        """Search YouTube for a track and download it. If video_id is provided, download that specific video."""
+        
+        # If a specific video_id is provided, download it directly
+        if video_id:
+            return self.download_by_video_id(video_id, output_path)
+        
         # Create more specific search query to get better matches
         # Include album name if available for better matching
         if track_info and track_info.get('album'):

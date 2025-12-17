@@ -85,6 +85,7 @@ class SearchRequest(BaseModel):
 class DownloadRequest(BaseModel):
     track_id: str
     location: Optional[str] = "local"  # 'local' or 'navidrome'
+    video_id: Optional[str] = None  # YouTube video ID if user selected a specific candidate
 
 # Response models
 class TrackResponse(BaseModel):
@@ -107,7 +108,7 @@ class DownloadStatusResponse(BaseModel):
 # Download status storage (in production, use Redis or a database)
 download_status: Dict[str, Dict] = {}
 
-def download_and_process(track_id: str, location: str = "local"):
+def download_and_process(track_id: str, location: str = "local", video_id: str = None):
     """Background task to download and process a track"""
     try:
         download_status[track_id] = {"status": "processing", "message": "Fetching track info...", "stage": "fetching", "progress": 10}
@@ -143,11 +144,13 @@ def download_and_process(track_id: str, location: str = "local"):
         download_status[track_id] = {"status": "processing", "message": "Searching YouTube and downloading...", "stage": "downloading", "progress": 30}
         
         # Download - pass full track_info for better matching
+        # If video_id is provided, download that specific video
         download_result = youtube_service.search_and_download(
             track_info['name'],
             track_info['artist'],
             download_path,
-            track_info  # Pass full track info for validation
+            track_info,  # Pass full track info for validation
+            video_id  # Specific YouTube video if user selected one
         )
         
         if not download_result.get('success'):
@@ -282,8 +285,8 @@ async def download_track(request: DownloadRequest, background_tasks: BackgroundT
         "stage": "queued"
     }
     
-    # Add background task with location parameter
-    background_tasks.add_task(download_and_process, request.track_id, request.location)
+    # Add background task with location and video_id parameters
+    background_tasks.add_task(download_and_process, request.track_id, request.location, request.video_id)
     
     return {
         "status": "queued",
@@ -298,6 +301,39 @@ async def get_download_status(track_id: str):
         raise HTTPException(status_code=404, detail="Download not found")
     
     return download_status[track_id]
+
+@app.get("/api/youtube/candidates/{track_id}")
+async def get_youtube_candidates(track_id: str):
+    """Get YouTube candidates for a track to let user choose if confidence is low"""
+    if not spotify_service:
+        raise HTTPException(status_code=500, detail="Spotify service not configured")
+    
+    try:
+        # Get track details from Spotify
+        track_info = spotify_service.get_track_details(track_id)
+        if not track_info:
+            raise HTTPException(status_code=404, detail="Track not found")
+        
+        # Search YouTube for candidates
+        result = youtube_service.search_candidates(
+            track_info['name'],
+            track_info['artist'],
+            track_info
+        )
+        
+        return {
+            "track": {
+                "id": track_id,
+                "name": track_info['name'],
+                "artist": track_info['artist'],
+                "album": track_info.get('album', '')
+            },
+            **result
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error searching YouTube: {str(e)}")
 
 @app.get("/api/download/file/{track_id}")
 async def download_file(track_id: str, filename: str = Query(...), background_tasks: BackgroundTasks = BackgroundTasks()):
