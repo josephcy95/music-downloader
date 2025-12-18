@@ -1,6 +1,6 @@
 import os
 import requests
-from mutagen.id3 import ID3, TIT2, TPE1, TALB, APIC, TDRC
+from mutagen.id3 import ID3, TIT2, TPE1, TPE2, TALB, APIC, TDRC
 from mutagen.mp3 import MP3
 from mutagen.flac import FLAC, Picture
 from typing import Dict, Optional
@@ -30,6 +30,10 @@ class MetadataService:
     def _apply_mp3_metadata(self, file_path: str, track_info: Dict) -> bool:
         """Apply metadata to MP3 file"""
         try:
+            # Ensure artist names are joined with semicolons
+            if 'artist' in track_info:
+                track_info['artist'] = track_info['artist'].replace(',', ';')
+
             audio = MP3(file_path, ID3=ID3)
             
             # Add ID3 tag if it doesn't exist
@@ -41,6 +45,7 @@ class MetadataService:
             # Set basic metadata
             audio['TIT2'] = TIT2(encoding=3, text=track_info['name'])
             audio['TPE1'] = TPE1(encoding=3, text=track_info['artist'])
+            audio['TPE2'] = TPE2(encoding=3, text=track_info['artist'])
             audio['TALB'] = TALB(encoding=3, text=track_info.get('album', ''))
             
             if track_info.get('release_date'):

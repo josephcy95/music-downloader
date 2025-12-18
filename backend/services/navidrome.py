@@ -16,8 +16,17 @@ class NavidromeService:
     
     def get_target_path(self, track_info: Dict, file_extension: str) -> Path:
         """Get the target path for a track in Navidrome music directory"""
+
+        # Ensure artist names are joined with semicolons
+        if 'artist' in track_info:
+            track_info['artist'] = track_info['artist'].replace(',', ';')
+            # Extract only the first artist
+            artist_name = track_info['artist'].split(';')[0].strip()
+        else:
+            artist_name = 'Unknown Artist'
+
         # Create artist directory structure
-        artist_name = self._sanitize_path(track_info['artist'])
+        artist_name = self._sanitize_path(artist_name)
         album_name = self._sanitize_path(track_info.get('album', 'Unknown Album'))
         
         # Create directory: /music/Artist/Album/
