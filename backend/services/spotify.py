@@ -54,6 +54,8 @@ class SpotifyService:
                 'name': track['name'],
                 'artists': [artist['name'] for artist in track['artists']],
                 'artist': ', '.join([artist['name'] for artist in track['artists']]),
+                'album_artists': [album_artist['name'] for album_artist in track['album']['artists']],
+                'album_artist': ', '.join([album_artist['name'] for album_artist in track['album']['artists']]),
                 'album': track['album']['name'],
                 'album_id': track['album']['id'],
                 'duration_ms': track['duration_ms'],

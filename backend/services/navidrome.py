@@ -25,6 +25,11 @@ class NavidromeService:
         else:
             artist_name = 'Unknown Artist'
 
+        if 'album_artist' in track_info:
+            track_info['album_artist'] = track_info['album_artist'].replace(',', ';')
+            # Extract only the first artist
+            artist_name = track_info['album_artist'].split(';')[0].strip()
+
         # Create artist directory structure
         artist_name = self._sanitize_path(artist_name)
         album_name = self._sanitize_path(track_info.get('album', 'Unknown Album'))

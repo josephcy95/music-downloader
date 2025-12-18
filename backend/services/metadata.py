@@ -33,7 +33,10 @@ class MetadataService:
             # Ensure artist names are joined with semicolons
             if 'artist' in track_info:
                 track_info['artist'] = track_info['artist'].replace(',', ';')
-
+            # Ensure artist names are joined with semicolons
+            if 'album_artist' in track_info:
+                track_info['album_artist'] = track_info['album_artist'].replace(',', ';')
+                
             audio = MP3(file_path, ID3=ID3)
             
             # Add ID3 tag if it doesn't exist
@@ -45,7 +48,7 @@ class MetadataService:
             # Set basic metadata
             audio['TIT2'] = TIT2(encoding=3, text=track_info['name'])
             audio['TPE1'] = TPE1(encoding=3, text=track_info['artist'])
-            audio['TPE2'] = TPE2(encoding=3, text=track_info['artist'])
+            audio['TPE2'] = TPE2(encoding=3, text=track_info['album_artist'])
             audio['TALB'] = TALB(encoding=3, text=track_info.get('album', ''))
             
             if track_info.get('release_date'):
