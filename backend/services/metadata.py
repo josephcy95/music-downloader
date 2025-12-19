@@ -1,6 +1,6 @@
 import os
 import requests
-from mutagen.id3 import ID3, TIT2, TPE1, TPE2, TALB, APIC, TDRC
+from mutagen.id3 import ID3, TIT2, TPE1, TPE2, TALB, APIC, TDRC, TRCK
 from mutagen.mp3 import MP3
 from mutagen.flac import FLAC, Picture
 from typing import Dict, Optional
@@ -52,6 +52,7 @@ class MetadataService:
             audio['TPE1'] = TPE1(encoding=3, text=track_info['artist'])
             audio['TPE2'] = TPE2(encoding=3, text=artist_name)
             audio['TALB'] = TALB(encoding=3, text=track_info.get('album', ''))
+            audio['TRCK'] = TRCK(encoding=3, text=str(track_info.get('track_number', 1)))
             
             if track_info.get('release_date'):
                 audio['TDRC'] = TDRC(encoding=3, text=track_info['release_date'][:4])
