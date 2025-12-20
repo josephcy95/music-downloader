@@ -1,7 +1,9 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Query
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from urllib.parse import quote, unquote
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 from typing import List, Optional, Dict
 import os
@@ -45,26 +47,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Get frontend directory path
-BASE_DIR = Path(__file__).parent.parent
-FRONTEND_DIR = BASE_DIR / "frontend"
-
-# Serve static files (CSS, JS, images, etc.)
-if FRONTEND_DIR.exists():
-    # Serve CSS and JS files
-    @app.get("/styles.css")
-    async def get_styles():
-        css_path = FRONTEND_DIR / "styles.css"
-        if css_path.exists():
-            return FileResponse(str(css_path), media_type="text/css")
-        raise HTTPException(status_code=404)
-    
-    @app.get("/app.js")
-    async def get_app_js():
-        js_path = FRONTEND_DIR / "app.js"
-        if js_path.exists():
-            return FileResponse(str(js_path), media_type="application/javascript")
-        raise HTTPException(status_code=404)
+app.mount("/static", StaticFiles(directory="frontend"), name="static")
+templates = Jinja2Templates(directory="frontend")
 
 # Initialize services
 try:
@@ -217,7 +201,7 @@ def download_and_process(track_id: str, location: str = "local", video_id: str =
             filename = os.path.basename(download_result['file_path'])
             # URL encode the filename to handle special characters (use query parameter)
             encoded_filename = quote(filename, safe='')
-            download_url = f"/api/download/file/{track_id}?filename={encoded_filename}"
+            download_url = f"api/download/file/{track_id}?filename={encoded_filename}"
             download_status[track_id] = {
                 "status": "completed",
                 "message": "Track ready for download",
@@ -234,13 +218,17 @@ def download_and_process(track_id: str, location: str = "local", video_id: str =
             "progress": 0
         }
 
-@app.get("/")
-async def root():
+@app.middleware("http")
+async def add_root_path(request: Request, call_next):
+    root_path = request.headers.get("X-Forwarded-Prefix", "")
+    request.scope["root_path"] = root_path
+    return await call_next(request)
+
+@app.get("/", response_class=HTMLResponse)
+async def root(request: Request):
     """Serve the frontend index.html"""
-    index_path = FRONTEND_DIR / "index.html"
-    if index_path.exists():
-        return FileResponse(str(index_path))
-    return {"message": "Music Downloader API", "status": "running", "frontend": "not found"}
+    template_name = "index.html"
+    return templates.TemplateResponse(template_name, context={"request": request})
 
 @app.post("/api/search", response_model=List[TrackResponse])
 async def search_tracks(request: SearchRequest):

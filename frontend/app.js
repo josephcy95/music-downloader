@@ -1,6 +1,3 @@
-// Configuration - use relative URLs since frontend is served from same origin
-const API_BASE_URL = '';
-
 // DOM elements
 const searchInput = document.getElementById('searchInput');
 const searchBtn = document.getElementById('searchBtn');
@@ -72,7 +69,7 @@ async function handleSearch() {
 }
 
 async function searchTracks(query) {
-    const response = await fetch(`${API_BASE_URL}/api/search`, {
+    const response = await fetch(`api/search`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -89,7 +86,7 @@ async function searchTracks(query) {
 }
 
 async function searchAlbums(query) {
-    const response = await fetch(`${API_BASE_URL}/api/search/albums`, {
+    const response = await fetch(`api/search/albums`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -119,7 +116,7 @@ async function displayTracks(tracks) {
     const downloadedTracks = new Set();
     const checkPromises = tracks.map(async (track) => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/track/${track.id}/exists`);
+            const response = await fetch(`api/track/${track.id}/exists`);
             if (response.ok) {
                 const data = await response.json();
                 if (data.exists) {
@@ -185,7 +182,7 @@ async function downloadTrack(track, selectedVideoId = null) {
         try {
             updateDownloadButton(trackId, true);
             console.log('Fetching YouTube candidates for:', trackId);
-            const candidatesResponse = await fetch(`${API_BASE_URL}/api/youtube/candidates/${trackId}`);
+            const candidatesResponse = await fetch(`api/youtube/candidates/${trackId}`);
             
             if (candidatesResponse.ok) {
                 const data = await candidatesResponse.json();
@@ -223,7 +220,7 @@ async function downloadTrack(track, selectedVideoId = null) {
         addStatusItem(trackId, track, 'queued', 'Download queued...', 0);
         
         // Start download
-        const response = await fetch(`${API_BASE_URL}/api/download`, {
+        const response = await fetch(`api/download`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -323,7 +320,7 @@ document.getElementById('candidateModal')?.addEventListener('click', (e) => {
 async function pollDownloadStatus(trackId, track) {
     const pollInterval = setInterval(async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/download/status/${trackId}`);
+            const response = await fetch(`api/download/status/${trackId}`);
             
             if (!response.ok) {
                 clearInterval(pollInterval);
@@ -608,7 +605,7 @@ let currentAlbum = null;
 
 async function showAlbumDetails(albumId) {
     try {
-        const response = await fetch(`${API_BASE_URL}/api/album/${albumId}`);
+        const response = await fetch(`api/album/${albumId}`);
         if (!response.ok) throw new Error('Failed to fetch album');
         
         const album = await response.json();
@@ -662,7 +659,7 @@ async function downloadAlbum() {
     const downloadLocation = document.getElementById('downloadLocation').value;
     
     try {
-        const response = await fetch(`${API_BASE_URL}/api/download/album`, {
+        const response = await fetch(`api/download/album`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
