@@ -279,15 +279,6 @@ function showCandidateModal(track, candidates, location) {
     // Show candidates
     candidatesList.innerHTML = candidates.map((candidate) => `
         <div class="candidate-card" data-video-id="${candidate.video_id}">
-            <img
-                src="${candidate.thumbnail || 'https://via.placeholder.com/120x68?text=No+Thumb'}"
-                alt="Thumbnail"
-                class="candidate-thumb"
-                loading="lazy"
-                referrerpolicy="no-referrer"
-                crossorigin="anonymous"
-                onerror="this.onerror=null; this.src='https://via.placeholder.com/120x68?text=No+Thumb'"
-            />
             <div class="candidate-info">
                 <div class="candidate-title-row">
                     <div class="candidate-title">${escapeHtml(candidate.title)}</div>

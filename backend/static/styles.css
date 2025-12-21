@@ -561,13 +561,7 @@ header h1 {
     transform: translateX(4px);
 }
 
-.candidate-thumb {
-    width: 100px;
-    height: 56px;
-    object-fit: cover;
-    border-radius: 6px;
-    flex-shrink: 0;
-}
+/* thumbnail removed from candidate selection */
 
 .candidate-info {
     flex: 1;
