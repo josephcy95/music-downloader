@@ -87,6 +87,7 @@ class MetadataService:
             audio['TITLE'] = track_info['name']
             audio['ARTIST'] = track_info['artist']
             audio['ALBUM'] = track_info.get('album', '')
+            audio['TRACKNUMBER'] = str(track_info.get('track_number', 1))
             
             if track_info.get('release_date'):
                 audio['DATE'] = track_info['release_date'][:4]
