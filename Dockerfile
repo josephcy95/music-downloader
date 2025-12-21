@@ -17,7 +17,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy backend code
 COPY backend/ ./backend/
-COPY frontend/ ./frontend/
 
 # Create downloads directory
 RUN mkdir -p /app/downloads/temp

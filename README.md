@@ -209,6 +209,11 @@ music-downloader/
 │   ├── config.py              # Configuration management
 │   ├── requirements.txt       # Python dependencies
 │   ├── env.example            # Environment variables template
+│   ├── static                 # Static files
+│   │   ├── app.js             # Frontend JavaScript
+│   │   └── styles.css         # Styling
+│   ├── templates              # Templates
+│   │   └── index.html         # Main HTML page
 │   ├── services/
 │   │   ├── spotify.py         # Spotify API integration
 │   │   ├── youtube.py         # YouTube download with yt-dlp
@@ -216,10 +221,6 @@ music-downloader/
 │   │   └── navidrome.py       # Navidrome integration
 │   └── utils/
 │       └── file_handler.py    # File operations
-├── frontend/
-│   ├── index.html             # Main HTML page
-│   ├── styles.css             # Styling
-│   └── app.js                 # Frontend JavaScript
 ├── images/                    # Screenshots and images for README
 ├── Dockerfile                 # Docker image definition
 ├── docker-compose.yml         # Docker Compose configuration
